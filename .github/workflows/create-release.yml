@@ -1,0 +1,41 @@
+name: Create APK release
+
+on:
+  push:
+    branches: [incoming]
+    paths:
+      - 'incoming/*.apk'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-apk-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Create release from signed APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          apk=$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep -E '^incoming/AlmeezanPay-v[0-9][0-9.]*\.apk$' | head -1)
+          test -f "$apk"
+          version=${apk#incoming/AlmeezanPay-v}
+          version=${version%.apk}
+          if gh release view "v${version}" >/dev/null 2>&1; then
+            echo "Release v${version} already exists."
+            exit 0
+          fi
+          gh release create "v${version}" "$apk" \
+            --target main \
+            --title "Almeezan Pay v${version}" \
+            --notes "Android update v${version}." \
+            --latest
